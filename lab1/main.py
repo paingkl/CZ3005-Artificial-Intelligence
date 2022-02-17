@@ -171,7 +171,6 @@ def ucs(start, goal):
 
 # [TASK 3]
 # ====================================================================================================
-# Heuristic function to calculate straight-line distance
 def heuristic(node1, node2):
     """
     Heuristic function to calculate the straight-line distance between two coordinates.
@@ -181,7 +180,6 @@ def heuristic(node1, node2):
     return math.sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
 
 
-# A*star search (with energy constraint)
 def astar(start, goal):
     """
     A* search with energy constraint.
