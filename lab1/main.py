@@ -86,6 +86,8 @@ def ucs_noconstraint(start, goal):
 
     Return the shortest path, distance travelled and energy consumed.
     """
+    # Using Python's built-in implementation of priority queue
+    # Queue entries are ordered in terms of priority (lowest first)
     queue = PriorityQueue()
 
     # Initialization
@@ -101,12 +103,11 @@ def ucs_noconstraint(start, goal):
         # Dequeue
         current_node = queue.get()[1]
 
-        # Stop when goal is reached
+        # Return solution when goal is reached
         if current_node == goal:
             path = reconstruct_path(explored, start, goal)
             return path, cumulative_distance[current_node], cumulative_cost[current_node]
 
-        # Explore every single neighbor of current node
         for neighbor in G[current_node]:
             # Calculate new cumulative distance based on current node
             new_distance = cumulative_distance[current_node] + Dist[','.join([current_node, neighbor])]
@@ -131,6 +132,8 @@ def ucs(start, goal):
 
     Return the shortest path, distance travelled and energy consumed.
     """
+    # Using Python's built-in implementation of priority queue
+    # Queue entries are ordered in terms of priority (lowest first) 
     queue = PriorityQueue()
 
     # Initialization
@@ -146,12 +149,11 @@ def ucs(start, goal):
         # Dequeue
         current_node = queue.get()[1]
 
-        # Stop when goal is reached
+        # Return solution when goal is reached
         if current_node == goal:
             path = reconstruct_path(explored, start, goal)
             return path, cumulative_distance[current_node], cumulative_cost[current_node]
 
-        # Explore every single neighbor of current node
         for neighbor in G[current_node]:
             # Calculate new cumulative distance based on current node
             new_distance = cumulative_distance[current_node] + Dist[','.join([current_node, neighbor])]
@@ -173,7 +175,9 @@ def ucs(start, goal):
 # ====================================================================================================
 def heuristic(node1, node2):
     """
-    Heuristic function to calculate the straight-line distance between two coordinates.
+    Heuristic function for A* search.
+    
+    Return the straight-line distance between two nodes based on their coordinates.
     """
     x1, y1 = Coord[node1]
     x2, y2 = Coord[node2]
@@ -186,6 +190,8 @@ def astar(start, goal):
 
     Return the shortest path, distance travelled and energy consumed.
     """
+    # Using Python's built-in implementation of priority queue
+    # Queue entries are ordered in terms of priority (lowest first)
     queue = PriorityQueue()
 
     # Initialization
@@ -201,12 +207,11 @@ def astar(start, goal):
         # Dequeue
         current_node = queue.get()[1]
 
-        # Stop when goal is reached
+        # Return solution when goal is reached
         if current_node == goal:
             path = reconstruct_path(explored, start, goal)
             return path, cumulative_distance[current_node], cumulative_cost[current_node]
 
-        # Explore every single neighbor of current node
         for neighbor in G[current_node]:
             # Calculate new cumulative distance based on current node
             new_distance = cumulative_distance[current_node] + Dist[','.join([current_node, neighbor])]
@@ -228,7 +233,9 @@ def astar(start, goal):
 
 def reconstruct_path(explored, start, goal):
     """
-    Reconstruct the path from the dictionary of explored nodes.
+    Reconstruct the path from the dictionary of explored nodes by backtracking.
+
+    Return the list of nodes (start and goal inclusive) along the path.
     """
     # Start from goal node
     current_node = goal
@@ -271,3 +278,4 @@ if __name__ == '__main__':
     print('Shortest distance: {}.'.format(str(distance)))
     print('Total energy cost: {}.'.format(str(cost)))
     print()
+    
