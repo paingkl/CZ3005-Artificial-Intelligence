@@ -2,7 +2,7 @@ import json
 from queue import PriorityQueue
 import math
 
-# Example instance
+# Example 1 (from lab manual)
 # ====================================================================================================
 # # Constants
 # START = 'S'
@@ -49,12 +49,77 @@ import math
 # }
 
 
+# Example 2
+# ====================================================================================================
+# # Constants
+# START = '1'
+# END = '6'
+# BUDGET = 17
+
+# # Dictionaries
+# G = {
+#     '1': ['2', '3'], 
+#     '2': ['1', '3', '4', '5'], 
+#     '3': ['1', '2', '4', '5'], 
+#     '4': ['2', '3', '5', '6'], 
+#     '5': ['2', '3', '4', '6'], 
+#     '6': ['4', '5']
+# }
+
+# Dist = {
+#     '1,2': 1, 
+#     '2,1': 1, 
+#     '1,3': 10, 
+#     '3,1': 10, 
+#     '2,3': 1, 
+#     '3,2': 1, 
+#     '2,4': 1, 
+#     '4,2': 1, 
+#     '2,5': 2, 
+#     '5,2': 2, 
+#     '3,4': 5, 
+#     '4,3': 5, 
+#     '3,5': 12, 
+#     '5,3': 12, 
+#     '4,5': 10, 
+#     '5,4': 10, 
+#     '4,6': 1, 
+#     '6,4': 1, 
+#     '5,6': 2, 
+#     '6,5': 2
+# }
+
+# Cost = {
+#     '1,2': 10, 
+#     '2,1': 10, 
+#     '1,3': 3, 
+#     '3,1': 3, 
+#     '2,3': 2, 
+#     '3,2': 2, 
+#     '2,4': 1, 
+#     '4,2': 1, 
+#     '2,5': 3, 
+#     '5,2': 3, 
+#     '3,4': 7, 
+#     '4,3': 7, 
+#     '3,5': 3, 
+#     '5,3': 3, 
+#     '4,5': 1, 
+#     '5,4': 1, 
+#     '4,6': 7, 
+#     '6,4': 7, 
+#     '5,6': 2, 
+#     '6,5': 2
+# }
+
+
 # NYC instance
 # ====================================================================================================
 # Constants
 START = '1'
 END = '50'
 BUDGET = 287932
+NO_PATH = (START, 0, 0)  # Output to print if no path
 
 # Dictionaries
 G = {}
@@ -88,10 +153,10 @@ def ucs_noconstraint(start, goal):
     """
     # Using Python's built-in implementation of priority queue
     # Queue entries are ordered in terms of priority (lowest first)
-    queue = PriorityQueue()
+    pq = PriorityQueue()
 
     # Initialization
-    queue.put((0, start))               # Add start node to queue with priority 0
+    pq.put((0, start))                  # Add start node to priority queue with priority 0
     explored = {}                       # Dict of explored nodes {node: parent node}
     explored[start] = None              # Start node has no parent node
     cumulative_distance = {}            # Dict of distance from start to node
@@ -99,9 +164,9 @@ def ucs_noconstraint(start, goal):
     cumulative_cost = {}                # Dict of cost from start to node
     cumulative_cost[start] = 0          # Start to start cost should be 0
 
-    while not queue.empty():
+    while not pq.empty():
         # Dequeue
-        current_node = queue.get()[1]
+        current_node = pq.get()[1]
 
         # Return solution when goal is reached
         if current_node == goal:
@@ -115,13 +180,16 @@ def ucs_noconstraint(start, goal):
                 # Calculate new cumulative cost based on current node
                 new_cost = cumulative_cost[current_node] + Cost[','.join([current_node, neighbor])]
                 # Enqueue new node
-                queue.put((new_distance, neighbor))
+                pq.put((new_distance, neighbor))
                 # Mark as explored and assign current node as parent
                 explored[neighbor] = current_node
                 # Update cumulative distance
                 cumulative_distance[neighbor] = new_distance
                 # Update cumulative cost
                 cumulative_cost[neighbor] = new_cost
+
+    # Path not found
+    return None
 
 
 # [TASK 2]
@@ -134,10 +202,10 @@ def ucs(start, goal):
     """
     # Using Python's built-in implementation of priority queue
     # Queue entries are ordered in terms of priority (lowest first) 
-    queue = PriorityQueue()
+    pq = PriorityQueue()
 
     # Initialization
-    queue.put((0, start))               # Add start node to queue with priority 0
+    pq.put((0, start))               # Add start node to priority queue with priority 0
     explored = {}                       # Dict of explored nodes {node: parent node}
     explored[start] = None              # Start node has no parent node
     cumulative_distance = {}            # Dict of distance from start to node
@@ -145,9 +213,9 @@ def ucs(start, goal):
     cumulative_cost = {}                # Dict of cost from start to node
     cumulative_cost[start] = 0          # Start to start cost should be 0
 
-    while not queue.empty():
+    while not pq.empty():
         # Dequeue
-        current_node = queue.get()[1]
+        current_node = pq.get()[1]
 
         # Return solution when goal is reached
         if current_node == goal:
@@ -162,13 +230,16 @@ def ucs(start, goal):
                 new_cost = cumulative_cost[current_node] + Cost[','.join([current_node, neighbor])]
                 if new_cost <= BUDGET:
                     # Enqueue new node
-                    queue.put((new_distance, neighbor))
+                    pq.put((new_distance, neighbor))
                     # Mark as explored and assign current node as parent
                     explored[neighbor] = current_node
                     # Update cumulative distance
                     cumulative_distance[neighbor] = new_distance
                     # Update cumulative cost
                     cumulative_cost[neighbor] = new_cost
+    
+    # Path not found
+    return None
 
 
 # [TASK 3]
@@ -192,10 +263,10 @@ def astar(start, goal):
     """
     # Using Python's built-in implementation of priority queue
     # Queue entries are ordered in terms of priority (lowest first)
-    queue = PriorityQueue()
+    pq = PriorityQueue()
 
     # Initialization
-    queue.put((0, start))               # Add start node to queue with priority 0
+    pq.put((0, start))                  # Add start node to priority queue with priority 0
     explored = {}                       # Dict of explored nodes {node: parent node}
     explored[start] = None              # Start node has no parent node
     cumulative_distance = {}            # Dict of distance from start to node
@@ -203,9 +274,9 @@ def astar(start, goal):
     cumulative_cost = {}                # Dict of cost from start to node
     cumulative_cost[start] = 0          # Start to start cost should be 0
 
-    while not queue.empty():
+    while not pq.empty():
         # Dequeue
-        current_node = queue.get()[1]
+        current_node = pq.get()[1]
 
         # Return solution when goal is reached
         if current_node == goal:
@@ -222,13 +293,16 @@ def astar(start, goal):
                     # Set priority as new distance + distance from goal
                     priority = new_distance + heuristic(neighbor, goal)
                     # Enqueue new node
-                    queue.put((priority, neighbor))
+                    pq.put((priority, neighbor))
                     # Mark as explored and assign current node as parent
                     explored[neighbor] = current_node
                     # Update cumulative distance
                     cumulative_distance[neighbor] = new_distance
                     # Update cumulative cost
                     cumulative_cost[neighbor] = new_cost
+    
+    # Path not found
+    return None
 
 
 def reconstruct_path(explored, start, goal):
@@ -256,7 +330,7 @@ if __name__ == '__main__':
     init()
 
     # Task 1
-    path, distance, cost = ucs_noconstraint(START, END)
+    path, distance, cost = ucs_noconstraint(START, END) or NO_PATH
     print('\n[TASK 1]')
     print('Shortest path: {}.'.format('->'.join(path)))
     print('Shortest distance: {}.'.format(str(distance)))
@@ -264,7 +338,7 @@ if __name__ == '__main__':
     print()
 
     # Task 2
-    path, distance, cost = ucs(START, END)
+    path, distance, cost = ucs(START, END) or NO_PATH
     print('\n[TASK 2]')
     print('Shortest path: {}.'.format('->'.join(path)))
     print('Shortest distance: {}.'.format(str(distance)))
@@ -272,7 +346,7 @@ if __name__ == '__main__':
     print()
 
     # Task 3
-    path, distance, cost = astar(START, END)
+    path, distance, cost = astar(START, END) or NO_PATH
     print('\n[TASK 3]')
     print('Shortest path: {}.'.format('->'.join(path)))
     print('Shortest distance: {}.'.format(str(distance)))
