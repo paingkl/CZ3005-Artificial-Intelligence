@@ -1,8 +1,8 @@
 import json
-from queue import PriorityQueue
 import math
+import heapq
 
-# Example 1 (from lab manual)
+# Example instance
 # ====================================================================================================
 # # Constants
 # START = 'S'
@@ -49,70 +49,6 @@ import math
 # }
 
 
-# Example 2
-# ====================================================================================================
-# # Constants
-# START = '1'
-# END = '6'
-# BUDGET = 17
-
-# # Dictionaries
-# G = {
-#     '1': ['2', '3'], 
-#     '2': ['1', '3', '4', '5'], 
-#     '3': ['1', '2', '4', '5'], 
-#     '4': ['2', '3', '5', '6'], 
-#     '5': ['2', '3', '4', '6'], 
-#     '6': ['4', '5']
-# }
-
-# Dist = {
-#     '1,2': 1, 
-#     '2,1': 1, 
-#     '1,3': 10, 
-#     '3,1': 10, 
-#     '2,3': 1, 
-#     '3,2': 1, 
-#     '2,4': 1, 
-#     '4,2': 1, 
-#     '2,5': 2, 
-#     '5,2': 2, 
-#     '3,4': 5, 
-#     '4,3': 5, 
-#     '3,5': 12, 
-#     '5,3': 12, 
-#     '4,5': 10, 
-#     '5,4': 10, 
-#     '4,6': 1, 
-#     '6,4': 1, 
-#     '5,6': 2, 
-#     '6,5': 2
-# }
-
-# Cost = {
-#     '1,2': 10, 
-#     '2,1': 10, 
-#     '1,3': 3, 
-#     '3,1': 3, 
-#     '2,3': 2, 
-#     '3,2': 2, 
-#     '2,4': 1, 
-#     '4,2': 1, 
-#     '2,5': 3, 
-#     '5,2': 3, 
-#     '3,4': 7, 
-#     '4,3': 7, 
-#     '3,5': 3, 
-#     '5,3': 3, 
-#     '4,5': 1, 
-#     '5,4': 1, 
-#     '4,6': 7, 
-#     '6,4': 7, 
-#     '5,6': 2, 
-#     '6,5': 2
-# }
-
-
 # NYC instance
 # ====================================================================================================
 # Constants
@@ -151,43 +87,43 @@ def ucs_noconstraint(start, goal):
 
     Return the shortest path, distance travelled and energy consumed.
     """
-    # Using Python's built-in implementation of priority queue
-    # Queue entries are ordered in terms of priority (lowest first)
-    pq = PriorityQueue()
-
     # Initialization
-    pq.put((0, start))                  # Add start node to priority queue with priority 0
-    explored = {}                       # Dict of explored nodes {node: parent node}
-    explored[start] = None              # Start node has no parent node
-    cumulative_distance = {}            # Dict of distance from start to node
-    cumulative_distance[start] = 0      # Start to start distance should be 0
-    cumulative_cost = {}                # Dict of cost from start to node
-    cumulative_cost[start] = 0          # Start to start cost should be 0
+    pq = [(0, 0, start)]        # Min-heap priority queue (dist, cost, node)
+    came_from = {start: None}   # Dict of predecessors {node: predecessor}
+    distances = {start: 0}      # Dict of distance from start to node
+    visited = set()             # Set of visited nodes
 
-    while not pq.empty():
+    while pq:
         # Dequeue
-        current_node = pq.get()[1]
+        dist, cost, node = heapq.heappop(pq)
+        
+        if node in visited:
+            continue
 
         # Return solution when goal is reached
-        if current_node == goal:
-            path = reconstruct_path(explored, start, goal)
-            return path, cumulative_distance[current_node], cumulative_cost[current_node]
+        if node == goal:
+            path = reconstruct_path(came_from, start, goal)
+            return path, dist, cost
 
-        for neighbor in G[current_node]:
-            # Calculate new cumulative distance based on current node
-            new_distance = cumulative_distance[current_node] + Dist[','.join([current_node, neighbor])]
-            if neighbor not in explored or new_distance < cumulative_distance[neighbor]:
-                # Calculate new cumulative cost based on current node
-                new_cost = cumulative_cost[current_node] + Cost[','.join([current_node, neighbor])]
-                # Enqueue new node
-                pq.put((new_distance, neighbor))
-                # Mark as explored and assign current node as parent
-                explored[neighbor] = current_node
-                # Update cumulative distance
-                cumulative_distance[neighbor] = new_distance
-                # Update cumulative cost
-                cumulative_cost[neighbor] = new_cost
+        # Mark as visited
+        visited.add(node)
 
+        for neighbor in G[node]:
+            # Calculate new distance based on current node
+            new_dist = dist + Dist[','.join([node, neighbor])]
+            # Return infinity as value if key not in dict (to avoid KeyError)
+            # so new distance will always be lower for first time visited nodes
+            if new_dist < distances.get(neighbor, float('inf')):
+                # Update distances dict
+                distances[neighbor] = new_dist
+                # Calculate new cost based on current node
+                new_cost = cost + Cost[','.join([node, neighbor])]
+                # Assign current node as predecessor
+                came_from[neighbor] = node
+                # Enqueue
+                entry = (new_dist, new_cost, neighbor)
+                heapq.heappush(pq, entry)
+                
     # Path not found
     return None
 
@@ -200,43 +136,39 @@ def ucs(start, goal):
 
     Return the shortest path, distance travelled and energy consumed.
     """
-    # Using Python's built-in implementation of priority queue
-    # Queue entries are ordered in terms of priority (lowest first) 
-    pq = PriorityQueue()
-
     # Initialization
-    pq.put((0, start))               # Add start node to priority queue with priority 0
-    explored = {}                       # Dict of explored nodes {node: parent node}
-    explored[start] = None              # Start node has no parent node
-    cumulative_distance = {}            # Dict of distance from start to node
-    cumulative_distance[start] = 0      # Start to start distance should be 0
-    cumulative_cost = {}                # Dict of cost from start to node
-    cumulative_cost[start] = 0          # Start to start cost should be 0
+    pq = [(0, 0, start)]        # Min-heap priority queue (dist, cost, node)
+    came_from = {start: None}   # Dict of predecessors {node: predecessor}
+    distances = {start: 0}      # Dict of distance from start to node
+    costs = {start: 0}          # Dict of cost from start to node
 
-    while not pq.empty():
+    while pq:
         # Dequeue
-        current_node = pq.get()[1]
+        dist, cost, node = heapq.heappop(pq)
 
         # Return solution when goal is reached
-        if current_node == goal:
-            path = reconstruct_path(explored, start, goal)
-            return path, cumulative_distance[current_node], cumulative_cost[current_node]
+        if node == goal:
+            path = reconstruct_path(came_from, start, goal)
+            return path, dist, cost
 
-        for neighbor in G[current_node]:
-            # Calculate new cumulative distance based on current node
-            new_distance = cumulative_distance[current_node] + Dist[','.join([current_node, neighbor])]
-            if neighbor not in explored or new_distance < cumulative_distance[neighbor]:
-                # Calculate new cumulative cost based on current node
-                new_cost = cumulative_cost[current_node] + Cost[','.join([current_node, neighbor])]
-                if new_cost <= BUDGET:
-                    # Enqueue new node
-                    pq.put((new_distance, neighbor))
-                    # Mark as explored and assign current node as parent
-                    explored[neighbor] = current_node
-                    # Update cumulative distance
-                    cumulative_distance[neighbor] = new_distance
-                    # Update cumulative cost
-                    cumulative_cost[neighbor] = new_cost
+        for neighbor in G[node]:
+            # Calculate new distance and cost based on current node
+            new_dist = dist + Dist[','.join([node, neighbor])]
+            new_cost = cost + Cost[','.join([node, neighbor])]
+            # Return infinity as value if key not in dict (to avoid KeyError)
+            # so new distance and cost will always be lower for first time visited nodes
+            if new_cost <= BUDGET and (new_dist < distances.get(neighbor, float('inf')) or new_cost < costs.get(neighbor, float('inf'))):
+                # If new distance is shorter, update distances dict
+                if new_dist < distances.get(neighbor, float('inf')):
+                    distances[neighbor] = new_dist
+                # If new cost is lower, update costs dict
+                if new_cost < costs.get(neighbor, float('inf')):
+                    costs[neighbor] = new_cost
+                # Assign current node as predecessor
+                came_from[neighbor] = node
+                # Enqueue
+                entry = (new_dist, new_cost, neighbor)
+                heapq.heappush(pq, entry)
     
     # Path not found
     return None
@@ -246,7 +178,7 @@ def ucs(start, goal):
 # ====================================================================================================
 def heuristic(node1, node2):
     """
-    Heuristic function for A* search.
+    Heuristic function for A* search to get estimated shortest distance from node to goal.
     
     Return the straight-line distance between two nodes based on their coordinates.
     """
@@ -261,67 +193,64 @@ def astar(start, goal):
 
     Return the shortest path, distance travelled and energy consumed.
     """
-    # Using Python's built-in implementation of priority queue
-    # Queue entries are ordered in terms of priority (lowest first)
-    pq = PriorityQueue()
-
     # Initialization
-    pq.put((0, start))                  # Add start node to priority queue with priority 0
-    explored = {}                       # Dict of explored nodes {node: parent node}
-    explored[start] = None              # Start node has no parent node
-    cumulative_distance = {}            # Dict of distance from start to node
-    cumulative_distance[start] = 0      # Start to start distance should be 0
-    cumulative_cost = {}                # Dict of cost from start to node
-    cumulative_cost[start] = 0          # Start to start cost should be 0
+    open = [(0, 0, 0, start)]   # Min-heap open set (f_score, g_score, cost, node)
+    came_from = {start: None}   # Dict of predecessors {node: predecessor}
+    g_scores = {start: 0}       # Dict of g(n): distance from start to node
+    costs = {start: 0}          # Dict of cumulative cost from start to node
 
-    while not pq.empty():
-        # Dequeue
-        current_node = pq.get()[1]
+    while open:
+        # Remove from open set
+        f_score, g_score, cost, node = heapq.heappop(open)
 
         # Return solution when goal is reached
-        if current_node == goal:
-            path = reconstruct_path(explored, start, goal)
-            return path, cumulative_distance[current_node], cumulative_cost[current_node]
+        if node == goal:
+            path = reconstruct_path(came_from, start, goal)
+            return path, g_score, cost
 
-        for neighbor in G[current_node]:
-            # Calculate new cumulative distance based on current node
-            new_distance = cumulative_distance[current_node] + Dist[','.join([current_node, neighbor])]
-            if neighbor not in explored or new_distance < cumulative_distance[neighbor]:
-                # Calculate new cumulative cost based on current node
-                new_cost = cumulative_cost[current_node] + Cost[','.join([current_node, neighbor])]
-                if new_cost <= BUDGET:
-                    # Set priority as new distance + distance from goal
-                    priority = new_distance + heuristic(neighbor, goal)
-                    # Enqueue new node
-                    pq.put((priority, neighbor))
-                    # Mark as explored and assign current node as parent
-                    explored[neighbor] = current_node
-                    # Update cumulative distance
-                    cumulative_distance[neighbor] = new_distance
-                    # Update cumulative cost
-                    cumulative_cost[neighbor] = new_cost
-    
+        for neighbor in G[node]:
+            # Calculate new g_score and cost based on current node
+            new_g_score = g_score + Dist[','.join([node, neighbor])]
+            new_cost = cost + Cost[','.join([node, neighbor])]
+            # Return infinity as value if key not in dict (to avoid KeyError)
+            # so new g_score and cost will always be lower for first time visited nodes
+            if new_cost <= BUDGET and (new_g_score < g_scores.get(neighbor, float('inf')) or new_cost < costs.get(neighbor, float('inf'))):
+                # If new g_score is lower, update g_scores dict
+                if new_g_score < g_scores.get(neighbor, float('inf')):
+                    g_scores[neighbor] = new_g_score
+                # If new cost is lower, update costs dict
+                if new_cost < costs.get(neighbor, float('inf')):
+                    costs[neighbor] = new_cost
+                # Calculate new f_score
+                new_f_score = new_g_score + heuristic(neighbor, goal)
+                # Assign current node as predecessor
+                came_from[neighbor] = node
+                # Add to open set
+                entry = (new_f_score, new_g_score, new_cost, neighbor)
+                heapq.heappush(open, entry)
+
     # Path not found
     return None
 
 
-def reconstruct_path(explored, start, goal):
+def reconstruct_path(came_from, start, goal):
     """
-    Reconstruct the path from the dictionary of explored nodes by backtracking.
+    Reconstruct the path from the dictionary of predecessors by backtracking.
 
     Return the list of nodes (start and goal inclusive) along the path.
     """
     # Start from goal node
-    current_node = goal
+    current = goal
     path = []
 
     # Backtrack until start node
-    while current_node != start:
-        path.append(current_node)
-        current_node = explored[current_node]
+    while current != start:
+        path.append(current)
+        current = came_from[current]
     
-    # Append start node and reverse path
+    # Append start node at the end
     path.append(start)
+    # Return reversed path
     return path[::-1]
 
 
