@@ -2,7 +2,7 @@ import json
 import math
 import heapq
 
-# Example instance
+# Example 1 (from lab manual)
 # ====================================================================================================
 # # Constants
 # START = 'S'
@@ -46,6 +46,50 @@ import heapq
 #     'T,2': 6, 
 #     '3,T': 2, 
 #     'T,3': 2
+# }
+
+
+# Example 2
+# ====================================================================================================
+# # Constants
+# START = '1'
+# END = '6'
+# BUDGET = 17
+
+# # Dictionaries
+# G = {
+#     '1': ['2', '3'], 
+#     '2': ['4', '5'], 
+#     '3': ['2', '4', '5'], 
+#     '4': ['5', '6'], 
+#     '5': ['6'], 
+#     '6': []
+# }
+
+# Dist = {
+#     '1,2': 1, 
+#     '1,3': 10, 
+#     '2,4': 1, 
+#     '2,5': 2, 
+#     '3,2': 1, 
+#     '3,4': 5, 
+#     '3,5': 12, 
+#     '4,5': 10, 
+#     '4,6': 1, 
+#     '5,6': 2
+# }
+
+# Cost = {
+#     '1,2': 10, 
+#     '1,3': 3, 
+#     '2,4': 1, 
+#     '2,5': 3, 
+#     '3,2': 2, 
+#     '3,4': 7, 
+#     '3,5': 3, 
+#     '4,5': 1, 
+#     '4,6': 7, 
+#     '5,6': 2
 # }
 
 
@@ -155,9 +199,11 @@ def ucs(start, goal):
             # Calculate new distance and cost based on current node
             new_dist = dist + Dist[','.join([node, neighbor])]
             new_cost = cost + Cost[','.join([node, neighbor])]
+            if new_cost > BUDGET:
+                continue
             # Return infinity as value if key not in dict (to avoid KeyError)
             # so new distance and cost will always be lower for first time visited nodes
-            if new_cost <= BUDGET and (new_dist < distances.get(neighbor, float('inf')) or new_cost < costs.get(neighbor, float('inf'))):
+            if new_dist < distances.get(neighbor, float('inf')) or new_cost < costs.get(neighbor, float('inf')):
                 # If new distance is shorter, update distances dict
                 if new_dist < distances.get(neighbor, float('inf')):
                     distances[neighbor] = new_dist
@@ -194,40 +240,42 @@ def astar(start, goal):
     Return the shortest path, distance travelled and energy consumed.
     """
     # Initialization
-    open = [(0, 0, 0, start)]   # Min-heap open set (f_score, g_score, cost, node)
+    pq = [(0, 0, 0, start)]     # Min-heap priority queue (fscore, dist, cost, node)
     came_from = {start: None}   # Dict of predecessors {node: predecessor}
-    g_scores = {start: 0}       # Dict of g(n): distance from start to node
-    costs = {start: 0}          # Dict of cumulative cost from start to node
+    distances = {start: 0}      # Dict of distance from start to node
+    costs = {start: 0}          # Dict of cost from start to node
 
-    while open:
-        # Remove from open set
-        f_score, g_score, cost, node = heapq.heappop(open)
+    while pq:
+        # Dequeue
+        fscore, dist, cost, node = heapq.heappop(pq)
 
         # Return solution when goal is reached
         if node == goal:
             path = reconstruct_path(came_from, start, goal)
-            return path, g_score, cost
+            return path, dist, cost
 
         for neighbor in G[node]:
-            # Calculate new g_score and cost based on current node
-            new_g_score = g_score + Dist[','.join([node, neighbor])]
+            # Calculate new distance and cost based on current node
+            new_dist = dist + Dist[','.join([node, neighbor])]
             new_cost = cost + Cost[','.join([node, neighbor])]
+            if new_cost > BUDGET:
+                continue
             # Return infinity as value if key not in dict (to avoid KeyError)
-            # so new g_score and cost will always be lower for first time visited nodes
-            if new_cost <= BUDGET and (new_g_score < g_scores.get(neighbor, float('inf')) or new_cost < costs.get(neighbor, float('inf'))):
-                # If new g_score is lower, update g_scores dict
-                if new_g_score < g_scores.get(neighbor, float('inf')):
-                    g_scores[neighbor] = new_g_score
+            # so new distance and cost will always be lower for first time visited nodes
+            if new_dist < distances.get(neighbor, float('inf')) or new_cost < costs.get(neighbor, float('inf')):
+                # If new distance is lower, update distances dict
+                if new_dist < distances.get(neighbor, float('inf')):
+                    distances[neighbor] = new_dist
                 # If new cost is lower, update costs dict
                 if new_cost < costs.get(neighbor, float('inf')):
                     costs[neighbor] = new_cost
-                # Calculate new f_score
-                new_f_score = new_g_score + heuristic(neighbor, goal)
                 # Assign current node as predecessor
                 came_from[neighbor] = node
-                # Add to open set
-                entry = (new_f_score, new_g_score, new_cost, neighbor)
-                heapq.heappush(open, entry)
+                # Calculate new fscore
+                new_fscore = new_dist + heuristic(neighbor, goal)
+                # Enqueue
+                entry = (new_fscore, new_dist, new_cost, neighbor)
+                heapq.heappush(pq, entry)
 
     # Path not found
     return None
@@ -241,15 +289,13 @@ def reconstruct_path(came_from, start, goal):
     """
     # Start from goal node
     current = goal
-    path = []
+    path = [current]
 
     # Backtrack until start node
     while current != start:
-        path.append(current)
         current = came_from[current]
-    
-    # Append start node at the end
-    path.append(start)
+        path.append(current)
+
     # Return reversed path
     return path[::-1]
 
