@@ -2,97 +2,6 @@ import json
 import math
 import heapq
 
-# Example 1 (from lab manual)
-# ====================================================================================================
-# # Constants
-# START = 'S'
-# END = 'T'
-# BUDGET = 11
-
-# # Dictionaries
-# G = {
-#     'S': ['1', '2', '3'], 
-#     '1': ['S', 'T'], 
-#     '2': ['S', 'T'], 
-#     '3': ['S', 'T'], 
-#     'T': ['1', '2', '3']
-# }
-
-# Dist = {
-#     'S,1': 4, 
-#     '1,S': 4, 
-#     'S,2': 2, 
-#     '2,S': 2, 
-#     'S,3': 4, 
-#     '3,S': 4, 
-#     '1,T': 8, 
-#     'T,1': 8, 
-#     '2,T': 8, 
-#     'T,2': 8, 
-#     '3,T': 12, 
-#     'T,3': 12
-# }
-
-# Cost = {
-#     'S,1': 7, 
-#     '1,S': 7, 
-#     'S,2': 6, 
-#     '2,S': 6, 
-#     'S,3': 3, 
-#     '3,S': 3, 
-#     '1,T': 3, 
-#     'T,1': 3, 
-#     '2,T': 6, 
-#     'T,2': 6, 
-#     '3,T': 2, 
-#     'T,3': 2
-# }
-
-
-# Example 2
-# ====================================================================================================
-# # Constants
-# START = '1'
-# END = '6'
-# BUDGET = 17
-
-# # Dictionaries
-# G = {
-#     '1': ['2', '3'], 
-#     '2': ['4', '5'], 
-#     '3': ['2', '4', '5'], 
-#     '4': ['5', '6'], 
-#     '5': ['6'], 
-#     '6': []
-# }
-
-# Dist = {
-#     '1,2': 1, 
-#     '1,3': 10, 
-#     '2,4': 1, 
-#     '2,5': 2, 
-#     '3,2': 1, 
-#     '3,4': 5, 
-#     '3,5': 12, 
-#     '4,5': 10, 
-#     '4,6': 1, 
-#     '5,6': 2
-# }
-
-# Cost = {
-#     '1,2': 10, 
-#     '1,3': 3, 
-#     '2,4': 1, 
-#     '2,5': 3, 
-#     '3,2': 2, 
-#     '3,4': 7, 
-#     '3,5': 3, 
-#     '4,5': 1, 
-#     '4,6': 7, 
-#     '5,6': 2
-# }
-
-
 # NYC instance
 # ====================================================================================================
 # Constants
@@ -123,6 +32,19 @@ def init():
         Coord = json.load(f)
 
 
+class Node:
+    def __init__(self, id, parent, dist, cost):
+        self.id = id
+        self.parent = parent  # Store a Node object
+        self.dist = dist
+        self.cost = cost
+
+    # Overriding the comparison operator 
+    # to order nodes in priority queue based on cumulative distance
+    def __lt__(self, next):
+        return self.dist < next.dist
+
+
 # [TASK 1]
 # ====================================================================================================
 def ucs_noconstraint(start, goal):
@@ -132,40 +54,46 @@ def ucs_noconstraint(start, goal):
     Return the shortest path, distance travelled and energy consumed.
     """
     # Initialization
-    pq = [(0, 0, start)]        # Min-heap priority queue (dist, cost, node)
-    came_from = {start: None}   # Dict of predecessors {node: predecessor}
-    distances = {start: 0}      # Dict of distance from start to node
-    visited = set()             # Set of visited nodes
+    startNode = Node(start, None, 0, 0)     # Node(id, parent, dist, cost)
+    pq = [startNode]                        # Min-heap priority queue
+    distances = {start: 0}                  # Dict of distance from start to node
+    visited = set()                         # Set of visited nodes
 
     while pq:
         # Dequeue
-        dist, cost, node = heapq.heappop(pq)
-        
-        if node in visited:
+        curNode = heapq.heappop(pq)
+
+        if curNode.id in visited:
             continue
 
         # Return solution when goal is reached
-        if node == goal:
-            path = reconstruct_path(came_from, start, goal)
-            return path, dist, cost
+        if curNode.id == goal:
+            dist = curNode.dist
+            cost = curNode.cost
+            # Backtracking to reconstruct path
+            path = [goal]
+            while curNode.id != start:
+                curNode = curNode.parent
+                path.append(curNode.id)
+            return path[::-1], dist, cost
 
         # Mark as visited
-        visited.add(node)
+        visited.add(curNode.id)
 
-        for neighbor in G[node]:
+        for neighbor in G[curNode.id]:
             # Calculate new distance based on current node
-            new_dist = dist + Dist[','.join([node, neighbor])]
+            new_dist = curNode.dist + Dist[','.join([curNode.id, neighbor])]
             # Return infinity as value if key not in dict (to avoid KeyError)
             # so new distance will always be lower for first time visited nodes
             if new_dist < distances.get(neighbor, float('inf')):
                 # Update distances dict
                 distances[neighbor] = new_dist
                 # Calculate new cost based on current node
-                new_cost = cost + Cost[','.join([node, neighbor])]
-                # Assign current node as predecessor
-                came_from[neighbor] = node
+                new_cost = curNode.cost + Cost[','.join([curNode.id, neighbor])]
+                # Create a Node object to push into priority queue
+                neighborNode = Node(neighbor, curNode, new_dist, new_cost)
                 # Enqueue
-                entry = (new_dist, new_cost, neighbor)
+                entry = neighborNode
                 heapq.heappush(pq, entry)
                 
     # Path not found
@@ -181,41 +109,47 @@ def ucs(start, goal):
     Return the shortest path, distance travelled and energy consumed.
     """
     # Initialization
-    pq = [(0, 0, start)]        # Min-heap priority queue (dist, cost, node)
-    came_from = {start: None}   # Dict of predecessors {node: predecessor}
-    distances = {start: 0}      # Dict of distance from start to node
-    costs = {start: 0}          # Dict of cost from start to node
+    startNode = Node(start, None, 0, 0)     # Node(id, parent, dist, cost)
+    pq = [startNode]                        # Min-heap priority queue
+    distances = {start: 0}                  # Dict of distance from start to node
+    costs = {start: 0}                      # Dict of cost from start to node
 
     while pq:
         # Dequeue
-        dist, cost, node = heapq.heappop(pq)
+        curNode = heapq.heappop(pq)
 
         # Return solution when goal is reached
-        if node == goal:
-            path = reconstruct_path(came_from, start, goal)
-            return path, dist, cost
+        if curNode.id == goal:
+            dist = curNode.dist
+            cost = curNode.cost
+            # Backtracking to reconstruct path
+            path = [goal]
+            while curNode.id != start:
+                curNode = curNode.parent
+                path.append(curNode.id)
+            return path[::-1], dist, cost
 
-        for neighbor in G[node]:
+        for neighbor in G[curNode.id]:
             # Calculate new distance and cost based on current node
-            new_dist = dist + Dist[','.join([node, neighbor])]
-            new_cost = cost + Cost[','.join([node, neighbor])]
+            new_dist = curNode.dist + Dist[','.join([curNode.id, neighbor])]
+            new_cost = curNode.cost + Cost[','.join([curNode.id, neighbor])]
             if new_cost > BUDGET:
                 continue
             # Return infinity as value if key not in dict (to avoid KeyError)
             # so new distance and cost will always be lower for first time visited nodes
             if new_dist < distances.get(neighbor, float('inf')) or new_cost < costs.get(neighbor, float('inf')):
-                # If new distance is shorter, update distances dict
+                # If new distance is lower, update distances dict
                 if new_dist < distances.get(neighbor, float('inf')):
                     distances[neighbor] = new_dist
                 # If new cost is lower, update costs dict
                 if new_cost < costs.get(neighbor, float('inf')):
                     costs[neighbor] = new_cost
-                # Assign current node as predecessor
-                came_from[neighbor] = node
+                # Create a Node object to push into priority queue
+                neighborNode = Node(neighbor, curNode, new_dist, new_cost)
                 # Enqueue
-                entry = (new_dist, new_cost, neighbor)
+                entry = neighborNode
                 heapq.heappush(pq, entry)
-    
+
     # Path not found
     return None
 
@@ -240,24 +174,30 @@ def astar(start, goal):
     Return the shortest path, distance travelled and energy consumed.
     """
     # Initialization
-    pq = [(0, 0, 0, start)]     # Min-heap priority queue (fscore, dist, cost, node)
-    came_from = {start: None}   # Dict of predecessors {node: predecessor}
-    distances = {start: 0}      # Dict of distance from start to node
-    costs = {start: 0}          # Dict of cost from start to node
+    startNode = Node(start, None, 0, 0)     # Node(id, parent, dist, cost)
+    pq = [(0, startNode)]                   # Min-heap priority queue (f_score, Node)
+    distances = {start: 0}                  # Dict of distance from start to node
+    costs = {start: 0}                      # Dict of cost from start to node
 
     while pq:
         # Dequeue
-        fscore, dist, cost, node = heapq.heappop(pq)
+        fscore, curNode = heapq.heappop(pq)
 
         # Return solution when goal is reached
-        if node == goal:
-            path = reconstruct_path(came_from, start, goal)
-            return path, dist, cost
+        if curNode.id == goal:
+            dist = curNode.dist
+            cost = curNode.cost
+            # Backtracking to reconstruct path
+            path = [goal]
+            while curNode.id != start:
+                curNode = curNode.parent
+                path.append(curNode.id)
+            return path[::-1], dist, cost
 
-        for neighbor in G[node]:
+        for neighbor in G[curNode.id]:
             # Calculate new distance and cost based on current node
-            new_dist = dist + Dist[','.join([node, neighbor])]
-            new_cost = cost + Cost[','.join([node, neighbor])]
+            new_dist = curNode.dist + Dist[','.join([curNode.id, neighbor])]
+            new_cost = curNode.cost + Cost[','.join([curNode.id, neighbor])]
             if new_cost > BUDGET:
                 continue
             # Return infinity as value if key not in dict (to avoid KeyError)
@@ -269,35 +209,16 @@ def astar(start, goal):
                 # If new cost is lower, update costs dict
                 if new_cost < costs.get(neighbor, float('inf')):
                     costs[neighbor] = new_cost
-                # Assign current node as predecessor
-                came_from[neighbor] = node
                 # Calculate new fscore
                 new_fscore = new_dist + heuristic(neighbor, goal)
+                # Create a Node object to push into priority queue
+                neighborNode = Node(neighbor, curNode, new_dist, new_cost)
                 # Enqueue
-                entry = (new_fscore, new_dist, new_cost, neighbor)
+                entry = (new_fscore, neighborNode)  # Nodes will be ordered based on fscore
                 heapq.heappush(pq, entry)
 
     # Path not found
     return None
-
-
-def reconstruct_path(came_from, start, goal):
-    """
-    Reconstruct the path from the dictionary of predecessors by backtracking.
-
-    Return the list of nodes (start and goal inclusive) along the path.
-    """
-    # Start from goal node
-    current = goal
-    path = [current]
-
-    # Backtrack until start node
-    while current != start:
-        current = came_from[current]
-        path.append(current)
-
-    # Return reversed path
-    return path[::-1]
 
 
 if __name__ == '__main__':
