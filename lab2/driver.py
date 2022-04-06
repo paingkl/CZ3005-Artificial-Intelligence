@@ -1,5 +1,25 @@
 from pyswip import Prolog
 
+# Map layouts
+# ====================================================================================================
+# '#': Wall
+# 'W': Wumpus
+# 'O': Confundus Portal
+# '*': Coin
+# '^', '<', '>', 'v': Agent facing North, West, East, South directions
+# ' ': Empty (safe)
+layout1 = [
+    ['#', '#', '#', '#', '#', '#', '#'], 
+    ['#', ' ', ' ', ' ', 'O', ' ', '#'], 
+    ['#', 'W', '*', 'O', ' ', ' ', '#'], 
+    ['#', ' ', ' ', ' ', ' ', ' ', '#'], 
+    ['#', '^', ' ', 'O', ' ', ' ', '#'], 
+    ['#', '#', '#', '#', '#', '#', '#']
+]
+
+
+# Class representing each map cell of the world
+# ====================================================================================================
 class MapCell:
     def __init__(self, x, y):
         self.x = x
@@ -128,86 +148,99 @@ class MapCell:
         self.update_square()
 
 
+# Class representing the actual Wumpus World
+# ====================================================================================================
 class AbsoluteWorld:
-    width = 7   # No. of columns
-    height = 6  # No. of rows
-
-    def __init__(self):
-        self.grid = [[None for j in range(AbsoluteWorld.width)] for i in range(AbsoluteWorld.height)]
-        for i in range(AbsoluteWorld.height):
-            for j in range(AbsoluteWorld.width):
-                self.grid[i][j] = MapCell(j, AbsoluteWorld.height-1-i)  # MapCell(x, y)
-                if i == 0 or i == AbsoluteWorld.height-1 or j == 0 or j == AbsoluteWorld.width-1:
+    def __init__(self, layout):
+        self.width = len(layout[0])  # No. of columns
+        self.height = len(layout)    # No. of rows
+        self.has_arrow = True
+        self.wumpus_alive = False    # Wumpus is dead until spawned 
+        self.coin_count = 0          # Increment when spawned, decrement when picked up
+        # Initialize grid with default MapCells first
+        self.grid = [[MapCell(j, self.height-1-i) for j in range(self.width)] for i in range(self.height)]  # MapCell(x, y)
+        # Update MapCells based on layout
+        for i in range(self.height):
+            for j in range(self.width):
+                if layout[i][j] == '#':
                     self.grid[i][j].set_wall()
+                elif layout[i][j] == 'W':
+                    self.spawn_wumpus(i, j)
+                elif layout[i][j] == 'O':
+                    self.spawn_portal(i, j)
+                elif layout[i][j] == '*':
+                    self.spawn_coin(i, j)
+                elif layout[i][j] == '^':
+                    self.spawn_agent(i, j, 'north')
+                elif layout[i][j] == '<':
+                    self.spawn_agent(i, j, 'west')
+                elif layout[i][j] == '>':
+                    self.spawn_agent(i, j, 'east')
+                elif layout[i][j] == 'v':
+                    self.spawn_agent(i, j, 'south')
                 else:
                     self.grid[i][j].set_unvisited_and_safe()
-        self.has_arrow = True
-        self.wumpus_dead = False
-        # No. of coins in the world: increment when spawned, decrement when picked up
-        self.coin_count = 0
 
     def print_map(self):
         print('ABSOLUTE MAP: ')
-        for i in range(AbsoluteWorld.height):
-            squares = [self.grid[i][j].square for j in range(AbsoluteWorld.width)]
+        for i in range(self.height):
+            squares = [self.grid[i][j].square for j in range(self.width)]
             for k in range(3):
-                rowlist = [squares[s][k] for s in range(len(squares))]
-                for row in rowlist:
+                rows = [squares[s][k] for s in range(len(squares))]
+                for row in rows:
                     print(f'[{"|".join(row)}]', end=' ')
                 print()
             print()
 
-    def spawn_wumpus(self, x, y):
-        i, j = AbsoluteWorld.height-1-y, x
-        self.grid[i][j].set_wumpus()
-        self.grid[i][j].set_inhabited()
-        if i-1 != 0:
-            self.grid[i-1][j].set_stench()
-        if i+1 != AbsoluteWorld.height-1:
-            self.grid[i+1][j].set_stench()
-        if j-1 != 0:
-            self.grid[i][j-1].set_stench()
-        if j+1 != AbsoluteWorld.width-1:
-            self.grid[i][j+1].set_stench()
+    def spawn_wumpus(self, row, col):
+        self.grid[row][col].set_wumpus()
+        self.grid[row][col].set_inhabited()
+        if row-1 != 0:
+            self.grid[row-1][col].set_stench()
+        if row+1 != self.height-1:
+            self.grid[row+1][col].set_stench()
+        if col-1 != 0:
+            self.grid[row][col-1].set_stench()
+        if col+1 != self.width-1:
+            self.grid[row][col+1].set_stench()
+        self.wumpus_alive = True
 
     def despawn_wumpus(self, x, y):
         pass
 
-    def spawn_portal(self, x, y):
-        i, j = AbsoluteWorld.height-1-y, x
-        self.grid[i][j].set_portal()
-        self.grid[i][j].set_inhabited()
-        if i-1 != 0:
-            self.grid[i-1][j].set_tingle()
-        if i+1 != AbsoluteWorld.height-1:
-            self.grid[i+1][j].set_tingle()
-        if j-1 != 0:
-            self.grid[i][j-1].set_tingle()
-        if j+1 != AbsoluteWorld.width-1:
-            self.grid[i][j+1].set_tingle()
+    def spawn_portal(self, row, col):
+        self.grid[row][col].set_portal()
+        self.grid[row][col].set_inhabited()
+        if row-1 != 0:
+            self.grid[row-1][col].set_tingle()
+        if row+1 != self.height-1:
+            self.grid[row+1][col].set_tingle()
+        if col-1 != 0:
+            self.grid[row][col-1].set_tingle()
+        if col+1 != self.width-1:
+            self.grid[row][col+1].set_tingle()
 
-    def spawn_coin(self, x, y):
-        i, j = AbsoluteWorld.height-1-y, x
-        self.grid[i][j].set_glitter()
-        self.grid[i][j].set_inhabited()
+    def spawn_coin(self, row, col):
+        self.grid[row][col].set_glitter()
+        self.grid[row][col].set_inhabited()
+        self.grid[row][col].set_unvisited_and_safe()
         self.coin_count += 1
 
     def despawn_coin(self, x, y):
         pass
 
-    def spawn_agent(self, x, y, direction):
-        i, j = AbsoluteWorld.height-1-y, x
+    def spawn_agent(self, row, col, direction):
         if direction == 'north':
-            self.grid[i][j].set_north()
+            self.grid[row][col].set_north()
         if direction == 'west':
-            self.grid[i][j].set_west()
+            self.grid[row][col].set_west()
         if direction == 'east':
-            self.grid[i][j].set_east()
+            self.grid[row][col].set_east()
         if direction == 'south':
-            self.grid[i][j].set_south()
-        self.grid[i][j].set_inhabited()
+            self.grid[row][col].set_south()
+        self.grid[row][col].set_inhabited()
         # Confounded is On at the start of the game
-        self.grid[i][j].set_confounded()
+        self.grid[row][col].set_confounded()
 
     def move_agent(self):
         pass
@@ -222,16 +255,6 @@ class AbsoluteWorld:
         pass
 
 
-def populate_world(world):
-    world.spawn_wumpus(1, 3)
-    world.spawn_portal(3, 1)
-    world.spawn_portal(3, 3)
-    world.spawn_portal(4, 4)
-    world.spawn_coin(2, 3)
-    world.spawn_agent(1, 1, 'north')
-
-
 if __name__ == '__main__':
-    wumpus_world = AbsoluteWorld()
-    populate_world(wumpus_world)
+    wumpus_world = AbsoluteWorld(layout1)
     wumpus_world.print_map()
