@@ -6,7 +6,7 @@ from pyswip import Prolog
 # 'W': Wumpus
 # 'O': Confundus Portal
 # '*': Coin
-# '^', '<', '>', 'v': Agent facing North, West, East, South directions
+# '^', '>', 'v', '<': Agent facing North, East, South, West directions
 # ' ': Empty (safe)
 layout1 = [
     ['#', '#', '#', '#', '#', '#', '#'], 
@@ -24,6 +24,7 @@ class MapCell:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+        # Sensory indicators
         self.indicators = {
             'Confounded': 'off', 
             'Stench': 'off', 
@@ -39,7 +40,7 @@ class MapCell:
         # Symbol 5: 
         # 'W' if cell contains Wumpus
         # 'O' if cell contains Confundus Portal
-        # '^','<','>','v' for Agent facing North, West, East, South directions
+        # '^', '>', 'v', '<': Agent facing North, East, South, West directions
         # 's' for non-visited safe cell (no Agent)
         # 'S' for visited safe cell (no Agent)
         # '?' if none of the above
@@ -77,9 +78,19 @@ class MapCell:
         self.symbols['1'] = '%'
         self.update_square()
 
+    def unset_confounded(self):
+        self.indicators['Confounded'] = 'off'
+        self.symbols['1'] = '.'
+        self.update_square()
+
     def set_stench(self):
         self.indicators['Stench'] = 'on'
         self.symbols['2'] = '='
+        self.update_square()
+
+    def unset_stench(self):
+        self.indicators['Stench'] = 'off'
+        self.symbols['2'] = '.'
         self.update_square()
 
     def set_tingle(self):
@@ -91,7 +102,7 @@ class MapCell:
         self.symbols['4'] = self.symbols['6'] = '-'
         self.update_square()
 
-    def set_empty(self):
+    def unset_inhabited(self):
         self.symbols['4'] = self.symbols['6'] = ' '
         self.update_square()
 
@@ -107,16 +118,16 @@ class MapCell:
         self.symbols['5'] = '^'
         self.update_square()
 
-    def set_west(self):
-        self.symbols['5'] = '<'
-        self.update_square()
-
     def set_east(self):
         self.symbols['5'] = '>'
         self.update_square()
 
     def set_south(self):
         self.symbols['5'] = 'v'
+        self.update_square()
+
+    def set_west(self):
+        self.symbols['5'] = '<'
         self.update_square()
 
     def set_unvisited_and_safe(self):
@@ -132,14 +143,29 @@ class MapCell:
         self.symbols['7'] = '*'
         self.update_square()
 
+    def unset_glitter(self):
+        self.indicators['Glitter'] = 'off'
+        self.symbols['7'] = '.'
+        self.update_square()
+
     def set_bump(self):
         self.indicators['Bump'] = 'on'
         self.symbols['8'] = 'B'
+        self.update_square()
+
+    def unset_bump(self):
+        self.indicators['Bump'] = 'off'
+        self.symbols['8'] = '.'
         self.update_square()
     
     def set_scream(self):
         self.indicators['Scream'] = 'on'
         self.symbols['9'] = '@'
+        self.update_square()
+
+    def unset_scream(self):
+        self.indicators['Scream'] = 'off'
+        self.symbols['9'] = '.'
         self.update_square()
 
     def set_wall(self):
@@ -154,10 +180,12 @@ class AbsoluteWorld:
     def __init__(self, layout):
         self.width = len(layout[0])  # No. of columns
         self.height = len(layout)    # No. of rows
-        self.has_arrow = True
+        self.start_x = None
+        self.start_y = None
+        self.start_direction = None
         self.wumpus_alive = False    # Wumpus is dead until spawned 
-        self.coin_count = 0          # Increment when spawned, decrement when picked up
-        # Initialize grid with default MapCells first
+        self.coins_left = 0          # Increment when spawned, decrement when picked up
+        # Initialize grid map with default MapCells first
         self.grid = [[MapCell(j, self.height-1-i) for j in range(self.width)] for i in range(self.height)]  # MapCell(x, y)
         # Update MapCells based on layout
         for i in range(self.height):
@@ -172,12 +200,24 @@ class AbsoluteWorld:
                     self.spawn_coin(i, j)
                 elif layout[i][j] == '^':
                     self.spawn_agent(i, j, 'north')
-                elif layout[i][j] == '<':
-                    self.spawn_agent(i, j, 'west')
+                    self.start_x = j
+                    self.start_y = self.height-1-i
+                    self.start_direction = 'north'
                 elif layout[i][j] == '>':
                     self.spawn_agent(i, j, 'east')
+                    self.start_x = j
+                    self.start_y = self.height-1-i
+                    self.start_direction = 'east'
                 elif layout[i][j] == 'v':
                     self.spawn_agent(i, j, 'south')
+                    self.start_x = j
+                    self.start_y = self.height-1-i
+                    self.start_direction = 'south'
+                elif layout[i][j] == '<':
+                    self.spawn_agent(i, j, 'west')
+                    self.start_x = j
+                    self.start_y = self.height-1-i
+                    self.start_direction = 'west'
                 else:
                     self.grid[i][j].set_unvisited_and_safe()
 
@@ -192,67 +232,222 @@ class AbsoluteWorld:
                 print()
             print()
 
+    # Utility function to convert x, y position to row, column index of grid map
+    def xy_to_rowcol(self, x, y):
+        return self.height-1-y, x
+
     def spawn_wumpus(self, row, col):
         self.grid[row][col].set_wumpus()
         self.grid[row][col].set_inhabited()
-        if row-1 != 0:
+        if self.grid[row-1][col].symbols['5'] != '#':
             self.grid[row-1][col].set_stench()
-        if row+1 != self.height-1:
+        if self.grid[row+1][col].symbols['5'] != '#':
             self.grid[row+1][col].set_stench()
-        if col-1 != 0:
+        if self.grid[row][col-1].symbols['5'] != '#':
             self.grid[row][col-1].set_stench()
-        if col+1 != self.width-1:
+        if self.grid[row][col+1].symbols['5'] != '#':
             self.grid[row][col+1].set_stench()
         self.wumpus_alive = True
 
-    def despawn_wumpus(self, x, y):
-        pass
+    def despawn_wumpus(self, row, col):
+        self.grid[row][col].unset_inhabited()
+        self.grid[row][col].set_unvisited_and_safe()
+        if self.grid[row-1][col].symbols['5'] != '#':
+            self.grid[row-1][col].unset_stench()
+        if self.grid[row+1][col].symbols['5'] != '#':
+            self.grid[row+1][col].unset_stench()
+        if self.grid[row][col-1].symbols['5'] != '#':
+            self.grid[row][col-1].unset_stench()
+        if self.grid[row][col+1].symbols['5'] != '#':
+            self.grid[row][col+1].unset_stench()
+        self.wumpus_alive = False
 
     def spawn_portal(self, row, col):
         self.grid[row][col].set_portal()
         self.grid[row][col].set_inhabited()
-        if row-1 != 0:
+        if self.grid[row-1][col].symbols['5'] != '#':
             self.grid[row-1][col].set_tingle()
-        if row+1 != self.height-1:
+        if self.grid[row+1][col].symbols['5'] != '#':
             self.grid[row+1][col].set_tingle()
-        if col-1 != 0:
+        if self.grid[row][col-1].symbols['5'] != '#':
             self.grid[row][col-1].set_tingle()
-        if col+1 != self.width-1:
+        if self.grid[row][col+1].symbols['5'] != '#':
             self.grid[row][col+1].set_tingle()
 
     def spawn_coin(self, row, col):
         self.grid[row][col].set_glitter()
         self.grid[row][col].set_inhabited()
         self.grid[row][col].set_unvisited_and_safe()
-        self.coin_count += 1
+        self.coins_left += 1
 
-    def despawn_coin(self, x, y):
-        pass
+    def despawn_coin(self, row, col):
+        # If Confounded indicator was On previously, need to turn it off
+        # because this action would have been after game has already started or Agent has teleported
+        if self.grid[row][col].symbols['1'] == '%':
+            self.grid[row][col].unset_confounded()
+
+        # If Bump indicator was On previously, need to turn it off
+        # because Agent would not bump into a wall after this action
+        if self.grid[row][col].symbols['8'] == 'B':
+            self.grid[row][col].unset_bump()
+
+        # Check if coin exists in cell first
+        if self.grid[row][col].symbols['7'] == '*':
+            self.grid[row][col].unset_glitter()
+            self.coins_left -= 1
+            return True
+        return False
 
     def spawn_agent(self, row, col, direction):
         if direction == 'north':
             self.grid[row][col].set_north()
-        if direction == 'west':
-            self.grid[row][col].set_west()
         if direction == 'east':
             self.grid[row][col].set_east()
         if direction == 'south':
             self.grid[row][col].set_south()
+        if direction == 'west':
+            self.grid[row][col].set_west()
         self.grid[row][col].set_inhabited()
-        # Confounded is On at the start of the game
+        # Confounded indicator is On at the start of the game
         self.grid[row][col].set_confounded()
 
     def move_agent(self):
         pass
 
+    def turn_agent(self, row, col, new_direction):
+        # If Confounded indicator was On previously, need to turn it off
+        # because this action would have been after game has already started or Agent has teleported
+        if self.grid[row][col].symbols['1'] == '%':
+            self.grid[row][col].unset_confounded()
+
+        # If Bump indicator was On previously, need to turn it off
+        # because Agent would not bump into a wall after this action
+        if self.grid[row][col].symbols['8'] == 'B':
+            self.grid[row][col].unset_bump()
+
+        if new_direction == 'north':
+            self.grid[row][col].set_north()
+        if new_direction == 'east':
+            self.grid[row][col].set_east()
+        if new_direction == 'south':
+            self.grid[row][col].set_south()
+        if new_direction == 'west':
+            self.grid[row][col].set_west()
+
     def teleport_agent(self):
         pass
 
+    def agent_shoots(self, row, col, direction):
+        # If Confounded indicator was On previously, need to turn it off
+        # because this action would have been after game has already started or Agent has teleported
+        if self.grid[row][col].symbols['1'] == '%':
+            self.grid[row][col].unset_confounded()
+
+        # If Bump indicator was On previously, need to turn it off
+        # because Agent would not bump into a wall after this action
+        if self.grid[row][col].symbols['8'] == 'B':
+            self.grid[row][col].unset_bump()
+
+        wumpus_hit = False
+
+        if direction == 'north':
+            for i in range(row-1, 0, -1):
+                if self.grid[i][col].symbols['5'] == 'W':
+                    wumpus_hit = True
+                    row_w, col_w = i, col
+
+        if direction == 'south':
+            for i in range(row+1, self.height-1):
+                if self.grid[i][col].symbols['5'] == 'W':
+                    wumpus_hit = True
+                    row_w, col_w = i, col
+
+        if direction == 'east':
+            for j in range(col+1, self.width-1):
+                if self.grid[row][j].symbols['5'] == 'W':
+                    wumpus_hit = True
+                    row_w, col_w = row, j
+
+        if direction == 'west':
+            for j in range(col-1, 0, -1):
+                if self.grid[row][j].symbols['5'] == 'W':
+                    wumpus_hit = True
+                    row_w, col_w = row, j
+
+        if wumpus_hit:
+            self.despawn_wumpus(row_w, col_w)
+            self.grid[row][col].set_scream()  # Not sure if at Agent's or Wumpus's position
+
+
+# Class to simulate Agent's actions and consequences in the world
+# ====================================================================================================
+class Simulator:
+    def __init__(self, abs_world: AbsoluteWorld):
+        self.abs_world = abs_world
+        self.abs_x = abs_world.start_x                  # Agent's absolute x position
+        self.abs_y = abs_world.start_y                  # Agent's absolute y position
+        self.abs_direction = abs_world.start_direction  # Agent's absolute direction
+        self.has_arrow = True
+        self.coins_collected = 0
+
+    def move_forward(self):
+        # Save old x and y positions first
+        old_abs_x = self.abs_x
+        old_abs_y = self.abs_y
+
+        if self.abs_direction == 'north':
+            pass
+        if self.abs_direction == 'east':
+            pass
+        if self.abs_direction == 'south':
+            pass
+        if self.abs_direction == 'west':
+            pass
+
+    def turn_left(self):
+        if self.abs_direction == 'north':
+            self.abs_direction = 'west'
+        if self.abs_direction == 'east':
+            self.abs_direction = 'north'
+        if self.abs_direction == 'south':
+            self.abs_direction = 'east'
+        if self.abs_direction == 'west':
+            self.abs_direction = 'south'
+        # Update absolute map
+        row, col = self.abs_world.xy_to_rowcol(self.abs_x, self.abs_y)
+        self.abs_world.turn_agent(row, col, self.abs_direction)
+        # Return sensory indicators of MapCell that Agent is in after the action
+        return list(self.abs_world.grid[row][col].indicators.values())
+
+    def turn_right(self):
+        if self.abs_direction == 'north':
+            self.abs_direction = 'east'
+        if self.abs_direction == 'east':
+            self.abs_direction = 'south'
+        if self.abs_direction == 'south':
+            self.abs_direction = 'west'
+        if self.abs_direction == 'west':
+            self.abs_direction = 'north'
+        # Update absolute map
+        row, col = self.abs_world.xy_to_rowcol(self.abs_x, self.abs_y)
+        self.abs_world.turn_agent(row, col, self.abs_direction)
+        # Return sensory indicators of MapCell that Agent is in after the action
+        return list(self.abs_world.grid[row][col].indicators.values())
+
     def pickup_coin(self):
-        pass
+        row, col = self.abs_world.xy_to_rowcol(self.abs_x, self.abs_y)
+        if self.abs_world.despawn_coin(row, col):
+            self.coins_collected += 1
+        # Return sensory indicators of MapCell that Agent is in after the action
+        return list(self.abs_world.grid[row][col].indicators.values())
 
     def shoot_arrow(self):
-        pass
+        row, col = self.abs_world.xy_to_rowcol(self.abs_x, self.abs_y)
+        if self.has_arrow:
+            self.abs_world.agent_shoots(row, col, self.abs_direction)
+            self.has_arrow = False
+        # Return sensory indicators of MapCell that Agent is in after the action
+        return list(self.abs_world.grid[row][col].indicators.values())
 
 
 if __name__ == '__main__':
