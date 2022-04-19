@@ -1,8 +1,9 @@
 import random
+import sys
 
 from pyswip import Prolog
 prolog = Prolog()
-prolog.consult('Agent.pl')
+prolog.consult('JP-Agent.pl')
 
 
 # Map layout
@@ -19,7 +20,7 @@ layout1 = [
     ['#', ' ', ' ', ' ', 'O', ' ', '#'], 
     ['#', 'W', '*', 'O', ' ', ' ', '#'], 
     ['#', ' ', ' ', ' ', ' ', ' ', '#'], 
-    ['#', '^', ' ', 'O', ' ', ' ', '#'], 
+    ['#', '>', ' ', 'O', ' ', ' ', '#'], 
     ['#', '#', '#', '#', '#', '#', '#']
 ]
 
@@ -418,8 +419,8 @@ class RelativeWorld:
         self.grid[row][col].set_inhabited()
 
 
-# Class to simulate Agent's actions in absolute world and generate percepts
-# And also to update relative map by querying Agent using localisation and mapping terms
+# Class to simulate Agent's actions and their consequences in absolute world to generate percepts
+# and also to update relative map by querying Agent using localisation and mapping terms
 # ====================================================================================================
 class Simulator:
     def __init__(self, layout):
@@ -442,7 +443,7 @@ class Simulator:
         self.rel_x = self.rel_world.origin_x                        # Agent's relative x
         self.rel_y = self.rel_world.origin_y                        # Agent's relative y
         self.rel_direction = self.rel_world.origin_direction        # Agent's relative direction
-        self.rel_temp_indicators = None
+        self.rel_temp_indicators = None                             # Agent's relative temporary indicators
 
     # Absolute world related
     # ================================================================================================
@@ -672,6 +673,52 @@ class Simulator:
         
         return indicators
 
+    # Decide next action sequence for Agent when it reasons to stay at same cell
+    # due to adjacent cells being unsafe during explore(L)
+    def get_next_action_sequence(self):
+        row, col = self.abs_world.xy_to_rowcol(self.abs_x, self.abs_y)
+        # Find a safe adjacent cell for Agent to move to using absolute map knowledge
+        # Priority order in checking will be forward, leftward, rightward, backward
+        if self.abs_direction == 'north':
+            if self.abs_world.grid[row-1][col].symbols['5'] == 's' or self.abs_world.grid[row-1][col].symbols['5'] == 'S':
+                return ['moveforward']
+            elif self.abs_world.grid[row][col-1].symbols['5'] == 's' or self.abs_world.grid[row][col-1].symbols['5'] == 'S':
+                return ['turnleft', 'moveforward']
+            elif self.abs_world.grid[row][col+1].symbols['5'] == 's' or self.abs_world.grid[row][col+1].symbols['5'] == 'S':
+                return ['turnright', 'moveforward']
+            elif self.abs_world.grid[row+1][col].symbols['5'] == 's' or self.abs_world.grid[row+1][col].symbols['5'] == 'S':
+                return ['turnleft', 'turnleft', 'moveforward']
+        
+        if self.abs_direction == 'east':
+            if self.abs_world.grid[row][col+1].symbols['5'] == 's' or self.abs_world.grid[row][col+1].symbols['5'] == 'S':
+                return ['moveforward']
+            elif self.abs_world.grid[row-1][col].symbols['5'] == 's' or self.abs_world.grid[row-1][col].symbols['5'] == 'S':
+                return ['turnleft', 'moveforward']
+            elif self.abs_world.grid[row+1][col].symbols['5'] == 's' or self.abs_world.grid[row+1][col].symbols['5'] == 'S':
+                return ['turnright', 'moveforward']
+            elif self.abs_world.grid[row][col-1].symbols['5'] == 's' or self.abs_world.grid[row][col-1].symbols['5'] == 'S':
+                return ['turnleft', 'turnleft', 'moveforward']
+
+        if self.abs_direction == 'south':
+            if self.abs_world.grid[row+1][col].symbols['5'] == 's' or self.abs_world.grid[row+1][col].symbols['5'] == 'S':
+                return ['moveforward']
+            elif self.abs_world.grid[row][col+1].symbols['5'] == 's' or self.abs_world.grid[row][col+1].symbols['5'] == 'S':
+                return ['turnleft', 'moveforward']
+            elif self.abs_world.grid[row][col-1].symbols['5'] == 's' or self.abs_world.grid[row][col-1].symbols['5'] == 'S':
+                return ['turnright', 'moveforward']
+            elif self.abs_world.grid[row-1][col].symbols['5'] == 's' or self.abs_world.grid[row-1][col].symbols['5'] == 'S':
+                return ['turnleft', 'turnleft', 'moveforward']
+
+        if self.abs_direction == 'west':
+            if self.abs_world.grid[row][col-1].symbols['5'] == 's' or self.abs_world.grid[row][col-1].symbols['5'] == 'S':
+                return ['moveforward']
+            elif self.abs_world.grid[row+1][col].symbols['5'] == 's' or self.abs_world.grid[row+1][col].symbols['5'] == 'S':
+                return ['turnleft', 'moveforward']
+            elif self.abs_world.grid[row-1][col].symbols['5'] == 's' or self.abs_world.grid[row-1][col].symbols['5'] == 'S':
+                return ['turnright', 'moveforward']
+            elif self.abs_world.grid[row][col+1].symbols['5'] == 's' or self.abs_world.grid[row][col+1].symbols['5'] == 'S':
+                return ['turnleft', 'turnleft', 'moveforward']
+
     # Relative world related
     # ================================================================================================
     def reset_relative_world(self, indicators):
@@ -726,38 +773,41 @@ class Simulator:
         # Using big X and Y, each term will return all relevant relative x, y positions
         # which are then used to update the symbols of each map cell accordingly
         # safe(X,Y)
-        print('safe(X,Y):', end=' ')
+        # print('safe(X,Y):', end=' ')
         results = sorted(list(prolog.query('safe(X,Y)')), key=lambda d: d['X'])
         for result in results:
-            print(result, end=', ')
+            # print(result, end=', ')
             x, y = result.get('X'), result.get('Y')
             row, col = self.rel_world.xy_to_rowcol(x, y)
             self.rel_world.grid[row][col].set_unvisited_and_safe()
-        print()
+        # print()
+
         # visited(X,Y)
-        print('visited(X,Y):', end=' ')
+        # print('visited(X,Y):', end=' ')
         results = sorted(list(prolog.query('visited(X,Y)')), key=lambda d: d['X'])
         for result in results:
-            print(result, end=', ')
+            # print(result, end=', ')
             x, y = result.get('X'), result.get('Y')
             row, col = self.rel_world.xy_to_rowcol(x, y)
             self.rel_world.grid[row][col].set_visited_and_safe()
-        print()
+        # print()
+
         # wumpus(X,Y)
-        print('wumpus(X,Y):', end=' ')
+        # print('wumpus(X,Y):', end=' ')
         results = sorted(list(prolog.query('wumpus(X,Y)')), key=lambda d: d['X'])
         for result in results:
-            print(result, end=', ')
+            # print(result, end=', ')
             x, y = result.get('X'), result.get('Y')
             row, col = self.rel_world.xy_to_rowcol(x, y)
             self.rel_world.grid[row][col].set_wumpus()
             self.rel_world.grid[row][col].set_inhabited()
-        print()
+        # print()
+
         # confundus(X,Y)
-        print('confundus(X,Y):', end=' ')
+        # print('confundus(X,Y):', end=' ')
         results = sorted(list(prolog.query('confundus(X,Y)')), key=lambda d: d['X'])
         for result in results:
-            print(result, end=', ')
+            # print(result, end=', ')
             x, y = result.get('X'), result.get('Y')
             row, col = self.rel_world.xy_to_rowcol(x, y)
             # Check if cell possibly contains Wumpus also
@@ -766,45 +816,49 @@ class Simulator:
             else:
                 self.rel_world.grid[row][col].set_portal()
             self.rel_world.grid[row][col].set_inhabited()
-        print()
+        # print()
+
         # stench(X,Y)
-        print('stench(X,Y):', end=' ')
+        # print('stench(X,Y):', end=' ')
         results = sorted(list(prolog.query('stench(X,Y)')), key=lambda d: d['X'])
         for result in results:
-            print(result, end=', ')
+            # print(result, end=', ')
             x, y = result.get('X'), result.get('Y')
             row, col = self.rel_world.xy_to_rowcol(x, y)
             self.rel_world.grid[row][col].set_stench()
-        print()
+        # print()
+
         # tingle(X,Y)
-        print('tingle(X,Y):', end=' ')
+        # print('tingle(X,Y):', end=' ')
         results = sorted(list(prolog.query('tingle(X,Y)')), key=lambda d: d['X'])
         for result in results:
-            print(result, end=', ')
+            # print(result, end=', ')
             x, y = result.get('X'), result.get('Y')
             row, col = self.rel_world.xy_to_rowcol(x, y)
             self.rel_world.grid[row][col].set_tingle()
-        print()
+        # print()
+
         # glitter(X,Y)
-        print('glitter(X,Y):', end=' ')
+        # print('glitter(X,Y):', end=' ')
         results = sorted(list(prolog.query('glitter(X,Y)')), key=lambda d: d['X'])
         for result in results:
-            print(result, end=', ')
+            # print(result, end=', ')
             x, y = result.get('X'), result.get('Y')
             row, col = self.rel_world.xy_to_rowcol(x, y)
             self.rel_world.grid[row][col].set_glitter()
             self.rel_world.grid[row][col].set_inhabited()
-        print()
+        # print()
+
         # wall(X,Y)
-        print('wall(X,Y):', end=' ')
+        # print('wall(X,Y):', end=' ')
         results = sorted(list(prolog.query('wall(X,Y)')), key=lambda d: d['X'])
         for result in results:
-            print(result, end=', ')
+            # print(result, end=', ')
             x, y = result.get('X'), result.get('Y')
             row, col = self.rel_world.xy_to_rowcol(x, y)
             self.rel_world.grid[row][col].set_wall()
-        print()
-        print()
+        # print()
+        # print()
 
         # Finally, place Agent on relative map
         row, col = self.rel_world.xy_to_rowcol(self.rel_x, self.rel_y)
@@ -820,6 +874,175 @@ class Simulator:
             self.rel_world.grid[row][col].set_confounded()
 
 
+# Class to test correctness of Agent capabilities
+# ====================================================================================================
+class TestAgent:
+    def __init__(self, simulator: Simulator):
+        self.simulator = simulator
+
+    # Reset before next correctness test
+    def reset(self):
+        self.simulator.reset_absolute_world()
+        self.simulator.relative_reborn()  # reborn is called here
+        self.simulator.reset_relative_world(self.simulator.abs_world.start_indicators)  # reposition(L) is called here
+
+    # Simulate action in absolute world to generate percepts 
+    # which are then passed as L in move(A,L) calls to Agent
+    def execute_action(self, action):
+        print(action)
+        if action == 'moveforward':
+            indicators = self.simulator.move_forward()
+            # If indicators is None means reposition(L) was called inside move_forward()
+            # due to Wumpus/Confundus Portal so no need to call move(A,L)
+            if indicators:
+                list(prolog.query(f'move(moveforward,{indicators})'))
+        if action == 'turnleft':
+            indicators = self.simulator.turn_left()
+            list(prolog.query(f'move(turnleft,{indicators})'))
+        if action == 'turnright':
+            indicators = self.simulator.turn_right()
+            list(prolog.query(f'move(turnright,{indicators})'))
+        if action == 'pickup':
+            indicators = self.simulator.pickup_coin()
+            list(prolog.query(f'move(pickup,{indicators})'))
+        if action == 'shoot':
+            indicators = self.simulator.shoot_arrow()
+            list(prolog.query(f'move(shoot,{indicators})'))
+    
+    # Test if Agent can correctly represent its relative position on relative map
+    def test_localisation_and_mapping(self):
+        self.reset()
+        print('[Test correctness of Agent\'s localisation and mapping abilities]')
+        print('=== ABSOLUTE WORLD ===')
+        self.simulator.abs_world.print_map()
+
+        action_sequence = ['moveforward', 'turnleft', 'turnleft', 'moveforward', 
+            'turnright', 'moveforward', 'turnright', 'turnright', 'moveforward']
+        print(', '.join([str(action) for action in action_sequence]))
+
+        print('=== RELATIVE WORLD ===')
+        # Initial relative map
+        self.simulator.update_relative_map()
+        self.simulator.rel_world.print_map()
+        # Subsequent relative maps
+        for action in action_sequence:
+            self.execute_action(action)
+            self.simulator.update_relative_map()
+            self.simulator.rel_world.print_map()
+
+    # Test if Agent can correctly absorb and interpret sensory input passed by Driver
+    def test_sensory_inference(self):
+        self.reset()
+        print('[Test correctness of Agent\'s sensory inference]')
+        print('=== ABSOLUTE WORLD ===')
+        self.simulator.abs_world.print_map()
+
+        action_sequence = ['moveforward', 'turnleft', 'moveforward', 'moveforward', 'pickup', 
+            'moveforward', 'turnleft', 'moveforward', 'moveforward', 'turnleft', 'shoot']
+        print(', '.join([str(action) for action in action_sequence]))
+
+        print('=== RELATIVE WORLD ===')
+        # Initial relative map
+        self.simulator.update_relative_map()
+        self.simulator.rel_world.print_map()
+        # Subsequent relative maps
+        for action in action_sequence:
+            self.execute_action(action)
+            self.simulator.update_relative_map()
+            self.simulator.rel_world.print_map()
+
+    # Test if Agent can reset its knowledge base after stepping through Confundus Portal
+    def test_confundus_portal(self):
+        self.reset()
+        print('[Test correctness of Agent\'s memory management after stepping through a Confundus Portal]')
+        print('=== ABSOLUTE WORLD ===')
+        self.simulator.abs_world.print_map()
+
+        action_sequence = ['moveforward', 'moveforward']
+        print(', '.join([str(action) for action in action_sequence]))
+
+        print('=== RELATIVE WORLD ===')
+        # Initial relative map
+        self.simulator.update_relative_map()
+        self.simulator.rel_world.print_map()
+        # Subsequent relative maps
+        for action in action_sequence:
+            self.execute_action(action)
+            self.simulator.update_relative_map()
+            self.simulator.rel_world.print_map()
+
+        # Print absolute map again after teleport for verification
+        print('=== ABSOLUTE WORLD (after teleport) ===')
+        self.simulator.abs_world.print_map()
+
+    # Test if Agent can reset its knowledge base for a new game after walking into Wumpus
+    def test_end_game_reset(self):
+        self.reset()
+        print('[Test correctness of Agent\'s end-game reset]')
+        print('=== ABSOLUTE WORLD ===')
+        self.simulator.abs_world.print_map()
+
+        action_sequence = ['turnleft', 'moveforward', 'moveforward']
+        print(', '.join([str(action) for action in action_sequence]))
+
+        print('=== RELATIVE WORLD ===')
+        # Initial relative map
+        self.simulator.update_relative_map()
+        self.simulator.rel_world.print_map()
+        # Subsequent relative maps
+        for action in action_sequence:
+            self.execute_action(action)
+            self.simulator.update_relative_map()
+            self.simulator.rel_world.print_map()
+
+    # Test correctness of Agent's exploration capabilities
+    def test_explore(self):
+        self.reset()
+        print('[Test correctness of Agent\'s exploration capabilities]')
+        print('=== ABSOLUTE WORLD ===')
+        self.simulator.abs_world.print_map()
+
+        print('=== RELATIVE WORLD ===')
+        # Initial relative map
+        self.simulator.update_relative_map()
+        self.simulator.rel_world.print_map()
+
+        # Keep calling explore(L) until all coins are collected
+        while self.simulator.coins_collected < self.simulator.abs_world.coins_at_start:
+            result = list(prolog.query('explore(L)'))
+            # print(result)
+            suggested_actions = result[0].get('L')
+            if suggested_actions:
+                for action in suggested_actions:
+                    self.execute_action(action)
+                    self.simulator.update_relative_map()
+                    self.simulator.rel_world.print_map()
+            else:
+                # If no suggested actions from Agent (i.e., L = [])
+                # Driver will force an action sequence (mainly to not let Agent get stuck when surrounded by unsafe cells)
+                forced_actions = self.simulator.get_next_action_sequence()
+                for action in forced_actions:
+                    self.execute_action(action)
+                    self.simulator.update_relative_map()
+                    self.simulator.rel_world.print_map()
+
+            # Order Agent to pickup if current cell contains a Coin
+            if bool(list(prolog.query(f'glitter({self.simulator.rel_x},{self.simulator.rel_y})'))):
+                self.execute_action('pickup')
+                self.simulator.update_relative_map()
+                self.simulator.rel_world.print_map()
+        
+        # Coin collected, so keep calling explore(L) until Agent returns to Origin
+        while (self.simulator.rel_x, self.simulator.rel_y) != (self.simulator.rel_world.origin_x, self.simulator.rel_world.origin_y):
+            result = list(prolog.query('explore(L)'))
+            suggested_actions = result[0].get('L')
+            if suggested_actions:
+                for action in suggested_actions:
+                    self.execute_action(action)
+                    self.simulator.update_relative_map()
+                    self.simulator.rel_world.print_map()
+
+            
 # Convert the list of on/offs to a string of indicator names
 # E.g., [on,off,off,off,off,off] to Confounded-S-T-G-B-S
 def onoff_to_name(onoffs):
@@ -827,132 +1050,22 @@ def onoff_to_name(onoffs):
     return '-'.join(name[0] if onoff == 'on' else name[1] for name, onoff in zip(names, onoffs))     
 
 
-# Test updates on Wumpus World
-def simulate_wumpus_world(sim: Simulator):
-    print(onoff_to_name(sim.abs_world.start_indicators))
-    print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-    sim.abs_world.print_map()
-
-    sim.relative_reborn()  # reborn is called here
-    sim.reset_relative_world(sim.abs_world.start_indicators)  # reposition(L) is called here
-    sim.update_relative_map()
-    print(f'({sim.rel_x},{sim.rel_y}), {sim.rel_direction}')
-    sim.rel_world.print_map()
-
-    menu = 'Next action: (1)moveforward (2)turnleft (3)turnright (4)pickup (5)shoot (6)exit'
-    end = False
-    while not end:
-        print(menu)
-        choice = int(input())
-        if choice == 1:
-            print('moveforward')
-            onoffs = sim.move_forward()
-            print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-            sim.abs_world.print_map()
-            # If onoffs is None means reposition(L) was called inside move_forward()
-            # so no need to call move(A,L)
-            if onoffs:
-                list(prolog.query(f'move(moveforward,{onoffs})'))
-            sim.update_relative_map()
-            print(f'({sim.rel_x},{sim.rel_y}), {sim.rel_direction}')
-            sim.rel_world.print_map()
-        elif choice == 2:
-            print('turnleft')
-            onoffs = sim.turn_left()
-            print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-            sim.abs_world.print_map()
-            list(prolog.query(f'move(turnleft,{onoffs})'))
-            sim.update_relative_map()
-            print(f'({sim.rel_x},{sim.rel_y}), {sim.rel_direction}')
-            sim.rel_world.print_map()
-        elif choice == 3:
-            print('turnright')
-            onoffs = sim.turn_right()
-            print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-            sim.abs_world.print_map()
-            list(prolog.query(f'move(turnright,{onoffs})'))
-            sim.update_relative_map()
-            print(f'({sim.rel_x},{sim.rel_y}), {sim.rel_direction}')
-            sim.rel_world.print_map()
-        elif choice == 4:
-            print('pickup')
-            onoffs = sim.pickup_coin()
-            print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-            sim.abs_world.print_map()
-            list(prolog.query(f'move(pickup,{onoffs})'))
-            sim.update_relative_map()
-            print(f'({sim.rel_x},{sim.rel_y}), {sim.rel_direction}')
-            sim.rel_world.print_map()
-        elif choice == 5:
-            print('shoot')
-            onoffs = sim.shoot_arrow()
-            print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-            sim.abs_world.print_map()
-            list(prolog.query(f'move(shoot,{onoffs})'))
-            sim.update_relative_map()
-            print(f'({sim.rel_x},{sim.rel_y}), {sim.rel_direction}')
-            sim.rel_world.print_map()
-        elif choice == 6:
-            end = True
-        else:
-            pass
-    print(f'Coins spawned: {sim.abs_world.coins_at_start}')
-    print(f'Coins collected: {sim.coins_collected}')
-    print(f'Wumpus alive? {sim.abs_world.wumpus_alive}')
-    print(f'Has arrow? {sim.has_arrow}')
-
-
-# # Test updates on absolute world
-# def simulate_absolute_world(sim: Simulator):
-#     sim.abs_world.print_map()
-#     menu = 'Next action: (1)moveforward (2)turnleft (3)turnright (4)pickup (5)shoot (6)exit'
-#     end = False
-#     while not end:
-#         print(menu)
-#         choice = int(input())
-#         if choice == 1:
-#             print('moveforward')
-#             onoffs = sim.move_forward()
-#             print(onoff_to_name(onoffs))
-#             print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-#             sim.abs_world.print_map()
-#         elif choice == 2:
-#             print('turnleft')
-#             onoffs = sim.turn_left()
-#             print(onoff_to_name(onoffs))
-#             print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-#             sim.abs_world.print_map()
-#         elif choice == 3:
-#             print('turnright')
-#             onoffs = sim.turn_right()
-#             print(onoff_to_name(onoffs))
-#             print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-#             sim.abs_world.print_map()
-#         elif choice == 4:
-#             print('pickup')
-#             onoffs = sim.pickup_coin()
-#             print(onoff_to_name(onoffs))
-#             print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-#             sim.abs_world.print_map()
-#         elif choice == 5:
-#             print('shoot')
-#             onoffs = sim.shoot_arrow()
-#             print(onoff_to_name(onoffs))
-#             print(f'({sim.abs_x},{sim.abs_y}), {sim.abs_direction}')
-#             sim.abs_world.print_map()
-#         elif choice == 6:
-#             end = True
-#         else:
-#             pass
-#     print(f'Coins spawned: {sim.abs_world.coins_at_start}')
-#     print(f'Coins collected: {sim.coins_collected}')
-#     print(f'Wumpus alive? {sim.abs_world.wumpus_alive}')
-#     print(f'Has arrow? {sim.has_arrow}')
-
-
 if __name__ == '__main__':
+    # Filename of Driver printout
+    # <team name>-testPrintout-<agent source>-<driver source>.txt
+    # Source is either "Self" or "Friend"
+    filename = 'JP-testPrintout-Self-Self.txt'  # Change accordingly
+
     simulator = Simulator(layout1)
-    # simulate_absolute_world(simulator)
-    simulate_wumpus_world(simulator)
-    # simulator.abs_world.print_map()
-    # simulator.rel_world.print_map()
+    agenttest = TestAgent(simulator)
+
+    temp = sys.stdout
+    sys.stdout = open(filename, 'w')
+    # Run correctness tests
+    agenttest.test_localisation_and_mapping()
+    agenttest.test_sensory_inference()
+    agenttest.test_confundus_portal()
+    agenttest.test_end_game_reset()
+    agenttest.test_explore()
+    sys.stdout.close()
+    sys.stdout = temp
